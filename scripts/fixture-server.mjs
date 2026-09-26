@@ -60,6 +60,8 @@ export function startFixtureServer(port = 4599) {
     '/news/articles/tides': 'article-full.html',
     '/news/articles/night-trains': 'article-lazy.html',
     '/news/articles/botwall': 'article-botwall.html',
+    '/wire/defences': 'article-full.html',
+    '/wire/timetable': 'article-lazy.html',
   };
   const hits = [];
 
@@ -69,6 +71,10 @@ export function startFixtureServer(port = 4599) {
     if (pathname === '/feed.xml') {
       res.writeHead(200, { 'content-type': 'application/rss+xml; charset=utf-8' });
       return res.end(fixture('feed.xml'));
+    }
+    if (pathname === '/atom.xml') {
+      res.writeHead(200, { 'content-type': 'application/atom+xml; charset=utf-8' });
+      return res.end(fixture('feed.atom'));
     }
     if (pages[pathname]) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });

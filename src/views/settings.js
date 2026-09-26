@@ -236,6 +236,8 @@ export function renderSettings(root) {
     paintFeeds();
     maxInput.value = settings.maxStories;
     $('.download-images').checked = settings.downloadImages;
+    // Enable switch animations only after the initial state is painted.
+    requestAnimationFrame(() => requestAnimationFrame(() => root.querySelector('.settings-main')?.classList.add('ready')));
     paintStats();
     paintAbout();
   })();

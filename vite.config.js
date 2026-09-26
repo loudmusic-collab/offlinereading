@@ -62,7 +62,9 @@ export default defineConfig({
     proxyMiddleware(),
     cspPlugin(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // New versions install in the background and take over on the next
+      // launch, so an update never reloads the page mid-sync or mid-article.
+      registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icons/*.svg', 'icons/*.png'],
       manifest: {
@@ -90,7 +92,7 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: true,
+        skipWaiting: false,
         runtimeCaching: [],
       },
     }),

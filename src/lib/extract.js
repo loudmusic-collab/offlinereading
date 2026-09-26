@@ -85,10 +85,10 @@ export function extractArticle(html, pageUrl) {
   try {
     result = new Readability(doc, { charThreshold: 400, keepClasses: false }).parse();
   } catch (err) {
-    return { ok: false, reason: `Readability failed: ${err.message}`, textLength: 0, byline: metaAuthor, title: '', ...info };
+    return { ok: false, reason: `the page couldn’t be parsed (${err.message})`, textLength: 0, byline: metaAuthor, title: '', ...info };
   }
   if (!result || !result.content) {
-    return { ok: false, reason: 'No article content found', textLength: 0, byline: metaAuthor, title: '', ...info };
+    return { ok: false, reason: 'no article text was found on the page', textLength: 0, byline: metaAuthor, title: '', ...info };
   }
 
   const text = (result.textContent || '').replace(/\s+/g, ' ').trim();
@@ -96,10 +96,10 @@ export function extractArticle(html, pageUrl) {
   const base = { contentHTML: result.content, textLength: text.length, byline, title: result.title || '', ...info };
 
   if (text.length < MIN_ARTICLE_CHARS) {
-    return { ok: false, reason: `Extracted text too short (${text.length} chars)`, ...base };
+    return { ok: false, reason: `only ${text.length} characters of article text were found`, ...base };
   }
   if (text.length < 2000 && BLOCK_PATTERNS.some((re) => re.test(text) || re.test(result.title || ''))) {
-    return { ok: false, reason: 'Page looks like a bot check or paywall', ...base };
+    return { ok: false, reason: 'the page looked like a bot check or paywall', ...base };
   }
   return { ok: true, ...base };
 }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <title>Atom Wire</title>
+  <id>{{ORIGIN}}/atom.xml</id>
+  <updated>{{DATE0}}</updated>
+  <link rel="self" href="{{ORIGIN}}/atom.xml"/>
+  <entry>
+    <title>Wire: sea defences hold overnight</title>
+    <link rel="alternate" type="text/html" href="{{ORIGIN}}/wire/defences"/>
+    <id>{{ORIGIN}}/wire/defences</id>
+    <published>{{DATE0}}</published>
+    <author><name>Wire Staff</name></author>
+    <summary>Barriers held as the first of this week's high tides passed without flooding.</summary>
+    <media:thumbnail url="{{ORIGIN}}/img/wire-thumb.png" width="240"/>
+  </entry>
+  <entry>
+    <title>Wire: rail operators announce winter timetable</title>
+    <link rel="alternate" type="text/html" href="{{ORIGIN}}/wire/timetable"/>
+    <id>{{ORIGIN}}/wire/timetable</id>
+    <published>{{DATE4}}</published>
+    <summary type="html">&lt;p&gt;Timetables change on &lt;em&gt;14 December&lt;/em&gt;.&lt;/p&gt;</summary>
+  </entry>
+</feed>

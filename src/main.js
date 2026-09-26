@@ -1,6 +1,7 @@
 import './styles.css';
 import { registerSW } from 'virtual:pwa-register';
-import { state, subscribe } from './state.js';
+import { pruneStories } from './lib/prune.js';
+import { state, storiesChanged, subscribe } from './state.js';
 import { toast } from './ui/toast.js';
 import { renderArticle } from './views/article.js';
 import { renderList } from './views/list.js';
@@ -21,6 +22,11 @@ function route() {
 window.addEventListener('hashchange', route);
 route();
 
+// Expire week-old stories even if the user never syncs again (IndexedDB only).
+pruneStories()
+  .then((removed) => removed && storiesChanged())
+  .catch((err) => console.warn('Prune failed', err));
+
 const paintConnectivity = () => document.body.classList.toggle('is-offline', !state.online);
 subscribe(paintConnectivity);
 paintConnectivity();
@@ -39,6 +45,9 @@ if ('serviceWorker' in navigator) {
     immediate: true,
     onOfflineReady() {
       toast('Ready to work offline');
+    },
+    onNeedRefresh() {
+      toast('An update is ready — it will apply the next time you open the app.');
     },
   });
 }

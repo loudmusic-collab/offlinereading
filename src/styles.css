@@ -281,6 +281,46 @@ button {
 
 /* ---------- Story list ---------- */
 
+.list-updated {
+  margin: -4px 16px 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.list-updated:empty {
+  display: none;
+}
+
+.sync-report {
+  margin: 10px 16px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--warn-line);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  font-size: 0.85rem;
+}
+
+.sync-report p {
+  margin: 0;
+}
+
+.sync-report ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.day-heading {
+  position: sticky;
+  top: calc(var(--topbar-h) + env(safe-area-inset-top));
+  z-index: 5;
+  padding: 14px 16px 6px;
+  background: var(--bg);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+}
+
 .list-main {
   max-width: 760px;
   margin: 0 auto;
@@ -460,6 +500,12 @@ button {
 
 /* ---------- Reader ---------- */
 
+.text-size span {
+  font-family: var(--read-font);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
 .reader-bar-title {
   flex: 1;
   min-width: 0;
@@ -552,7 +598,7 @@ button {
 
 .content {
   font-family: var(--read-font);
-  font-size: 1.14rem;
+  font-size: calc(1.14rem * var(--reader-scale, 1));
   line-height: 1.65;
   overflow-wrap: break-word;
 }
@@ -815,6 +861,9 @@ a:focus-visible {
   border-radius: 999px;
   background: var(--line);
   cursor: pointer;
+}
+
+.ready .switch {
   transition: background 0.2s ease;
 }
 
@@ -828,6 +877,9 @@ a:focus-visible {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+}
+
+.ready .switch::after {
   transition: transform 0.2s ease;
 }
 

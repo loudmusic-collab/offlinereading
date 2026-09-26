@@ -4,6 +4,24 @@ import { storiesChanged } from '../state.js';
 import { BlobUrls, esc, formatDate, hostname } from '../ui/dom.js';
 import { icons } from '../ui/icons.js';
 
+// Reader text size is a per-device preference; storage may be unavailable.
+const SCALES = [0.9, 1, 1.12, 1.25];
+function loadScale() {
+  try {
+    const v = Number(localStorage.getItem('readerScale'));
+    return SCALES.includes(v) ? v : 1;
+  } catch {
+    return 1;
+  }
+}
+function saveScale(v) {
+  try {
+    localStorage.setItem('readerScale', String(v));
+  } catch {
+    // ignore
+  }
+}
+
 /** Swap data-offline-img placeholders for blob: URLs from IndexedDB; drop any without a stored image. */
 function hydrateImages(container, images, blobs) {
   for (const img of container.querySelectorAll('img[data-offline-img]')) {
@@ -27,6 +45,7 @@ export function renderArticle(root, id) {
     <header class="topbar reader-bar">
       <a class="icon-btn" href="#/" aria-label="Back to stories">${icons.back}</a>
       <span class="reader-bar-title"></span>
+      <button class="icon-btn text-size" type="button" aria-label="Change text size"><span aria-hidden="true">Aa</span></button>
       <button class="btn btn-ghost read-toggle" type="button" hidden>Mark unread</button>
     </header>
     <div class="offline-banner" role="status">${icons.offline}<span>Offline — this story is saved on your device</span></div>
@@ -34,6 +53,14 @@ export function renderArticle(root, id) {
 
   const main = root.querySelector('main');
   const toggle = root.querySelector('.read-toggle');
+
+  let scale = loadScale();
+  main.style.setProperty('--reader-scale', scale);
+  root.querySelector('.text-size').addEventListener('click', () => {
+    scale = SCALES[(SCALES.indexOf(scale) + 1) % SCALES.length];
+    main.style.setProperty('--reader-scale', scale);
+    saveScale(scale);
+  });
 
   (async () => {
     let article = await getArticle(id);
@@ -72,8 +99,8 @@ export function renderArticle(root, id) {
             article.extracted
               ? ''
               : `<div class="notice" role="note"><strong>Summary only.</strong> The full article couldn’t be saved${
-                  article.extractionNote ? ` (${esc(article.extractionNote)})` : ''
-                }, so this is the summary from the feed.</div>`
+                  article.extractionNote ? `: ${esc(article.extractionNote)}` : ''
+                }. Showing the summary from the feed instead.</div>`
           }
           <div class="content">${body || '<p class="muted">No text was available for this story.</p>'}</div>
           <p class="original">

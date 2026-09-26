@@ -33,7 +33,7 @@ describe('extractArticle', () => {
   it('flags bot walls so the RSS summary is used instead', () => {
     const result = extractArticle(fixture('article-botwall.html'), url);
     expect(result.ok).toBe(false);
-    expect(result.reason).toMatch(/too short|bot check/);
+    expect(result.reason).toMatch(/characters|bot check/);
   });
 
   it('flags pages with no article', () => {

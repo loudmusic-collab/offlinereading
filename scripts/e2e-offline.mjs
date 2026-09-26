@@ -121,7 +121,7 @@ try {
   await page.goBack();
   await page.locator('.story a', { hasText: 'rate decision' }).click();
   await page.waitForSelector('.reader .notice');
-  check(/site blocked the download \(HTTP 403\)/.test(await page.locator('.notice').textContent()), 'blocked site: notice explains why');
+  check(/the site blocked the download \(HTTP 403\)/.test(await page.locator('.notice').textContent()), 'blocked site: notice explains why');
   check((await page.locator('.content').textContent()).includes('Shares rose sharply'), 'blocked site: RSS summary shown instead');
   await shot(page, '3-article-fallback');
 
@@ -130,6 +130,49 @@ try {
   const stats = await page.locator('.stats').textContent();
   check(/Stories\s*4/.test(stats), `settings shows storage in use (${stats.replace(/\s+/g, ' ').trim()})`);
   await shot(page, '4-settings');
+
+  // ---------- Second feed (Atom), synced with pull-to-refresh ----------
+  await page.fill('input[name=name]', 'Atom Wire');
+  await page.fill('input[name=url]', `${fixture.origin}/atom.xml`);
+  await page.click('.add-feed button[type=submit]');
+  await page.waitForFunction(() => document.querySelectorAll('.feed').length === 2);
+  await page.click('a[aria-label="Back to stories"]');
+  await page.waitForSelector('.story');
+  await page.evaluate(() => window.scrollTo(0, 0));
+
+  const cdp = await context.newCDPSession(page);
+  const touch = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: 200, y }] });
+  await touch('touchStart', 160);
+  for (let y = 160; y <= 420; y += 20) await touch('touchMove', y);
+  check((await page.locator('.ptr-label').textContent()) === 'Release to sync', 'pull-to-refresh: indicator says "Release to sync"');
+  await touch('touchEnd');
+  await page.waitForFunction(() => document.querySelector('.sync-btn').disabled, null, { timeout: 5000 });
+  check(true, 'pull-to-refresh started a sync');
+  await page.waitForFunction(() => document.querySelectorAll('.story').length === 6 && !document.querySelector('.sync-btn').disabled, null, {
+    timeout: 60000,
+  });
+  check(true, 'second feed (Atom) synced: 6 stories');
+  const chips = await page.locator('.chip[data-source]').allTextContents();
+  check(chips.length === 2, `source filter chips: ${chips.join(', ')}`);
+  await page.click('.chip[data-source="Atom Wire"]');
+  check((await page.locator('.story').count()) === 2, 'filtering by source works');
+  await page.click('.chip[data-source="Atom Wire"]');
+  await shot(page, '4b-list-two-feeds');
+
+  // ---------- Lower the cap: read stories are pruned first ----------
+  await page.goto(`${APP}#/settings`);
+  await page.waitForSelector('.max-stories');
+  await page.waitForFunction(() => document.querySelector('.max-stories').value === '50');
+  await page.fill('.max-stories', '5');
+  await page.locator('.max-stories').dispatchEvent('change');
+  await page.waitForFunction(() => /Stories\s*5/.test(document.querySelector('.stats').textContent));
+  await page.goto(APP);
+  await page.waitForFunction(() => document.querySelectorAll('.story').length === 5);
+  const remaining = await page.locator('.story-title').allTextContents();
+  check(
+    !remaining.some((t) => t.includes('rate decision')) && remaining.some((t) => t.includes('spring tides')),
+    'max 5 stories: the oldest read story was pruned first',
+  );
 
   // ---------- Airplane mode ----------
   await page.goto(APP);
@@ -150,10 +193,10 @@ try {
 
   await page.reload();
   await page.waitForSelector('.story', { timeout: 10000 });
-  check((await page.locator('.story').count()) === 4, 'offline reload: app shell + 4 stories load');
+  check((await page.locator('.story').count()) === 5, 'offline reload: app shell + 5 stories load');
   check(await page.locator('.offline-banner').isVisible(), 'offline banner visible');
   check(await page.locator('.sync-btn').isDisabled(), 'sync disabled while offline');
-  check((await page.locator('.story.read').count()) === 2, 'read status persisted (2 opened stories marked read)');
+  check((await page.locator('.story.read').count()) === 1, 'read status persisted (opened story still marked read)');
   await shot(page, '5-list-offline');
 
   await page.locator('.story a', { hasText: 'Night trains' }).click();

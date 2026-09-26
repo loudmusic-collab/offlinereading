@@ -48,7 +48,7 @@ export function selectStories(feedResults, existingIds, maxStories, now = Date.n
 
 function describeError(err) {
   if (err instanceof HttpError) {
-    return [401, 403, 429, 451].includes(err.status) ? `site blocked the download (HTTP ${err.status})` : `HTTP ${err.status}`;
+    return [401, 403, 429, 451].includes(err.status) ? `the site blocked the download (HTTP ${err.status})` : `the site returned HTTP ${err.status}`;
   }
   if (err?.name === 'TimeoutError') return 'timed out';
   return err?.message || 'failed';

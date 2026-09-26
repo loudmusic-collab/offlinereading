@@ -13,6 +13,24 @@ function sourceHue(name) {
   return h;
 }
 
+function dayLabel(ms, now = new Date()) {
+  const d = new Date(ms);
+  const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(d)) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+function syncReport(result) {
+  if (!result) return '';
+  const bits = [`${result.added} new`];
+  if (result.fallback) bits.push(`${result.fallback} summary-only`);
+  if (result.pruned) bits.push(`${result.pruned} cleaned up`);
+  const failed = result.failedFeeds.map((f) => `<li><strong>${esc(f.name)}</strong> — ${esc(f.error)}</li>`).join('');
+  return `<p>Last sync: ${bits.join(' · ')}</p>${failed ? `<p>Couldn’t reach:</p><ul>${failed}</ul>` : ''}`;
+}
+
 function storyItem(a, blobs) {
   const thumb = blobs.get(a.thumbnailBlob || a.heroImageBlob);
   const initials = a.feedSource
@@ -61,6 +79,8 @@ export function renderList(root) {
     <div class="ptr" aria-hidden="true"><span class="ptr-icon">${icons.arrowDown}</span><span class="ptr-label">Pull to sync</span></div>
     <main class="list-main">
       <div class="filters" role="toolbar" aria-label="Filter stories"></div>
+      <p class="list-updated"></p>
+      <div class="sync-report" hidden></div>
       <ul class="story-list"></ul>
       <div class="empty" hidden></div>
     </main>`;
@@ -72,6 +92,8 @@ export function renderList(root) {
   const filters = root.querySelector('.filters');
   const list = root.querySelector('.story-list');
   const empty = root.querySelector('.empty');
+  const updated = root.querySelector('.list-updated');
+  const report = root.querySelector('.sync-report');
 
   syncBtn.addEventListener('click', startSync);
 
@@ -99,7 +121,20 @@ export function renderList(root) {
     const shown = articles.filter(
       (a) => (view.filter === 'all' || a.readStatus !== 'read') && (!view.source || a.feedSource === view.source),
     );
-    list.innerHTML = shown.map((a) => storyItem(a, blobs)).join('');
+    let lastGroup = null;
+    list.innerHTML = shown
+      .map((a) => {
+        const group = dayLabel(a.publishDate);
+        const heading = group !== lastGroup ? `<li class="day-heading" role="presentation">${esc(group)}</li>` : '';
+        lastGroup = group;
+        return heading + storyItem(a, blobs);
+      })
+      .join('');
+
+    updated.textContent = lastSync ? `Updated ${timeAgo(lastSync)}` : '';
+    const failures = state.lastResult?.failedFeeds.length;
+    report.hidden = !failures;
+    report.innerHTML = failures ? syncReport(state.lastResult) : '';
 
     empty.hidden = shown.length > 0;
     if (!articles.length) {
@@ -123,7 +158,6 @@ export function renderList(root) {
       const pct = phase === 'feeds' ? 5 + (done / Math.max(total, 1)) * 10 : phase === 'articles' ? 15 + (done / Math.max(total, 1)) * 80 : phase === 'cleanup' ? 98 : 3;
       bar.style.width = `${pct}%`;
     }
-    if (!state.syncing && lastSync) label.textContent = '';
   }
 
   filters.addEventListener('click', (e) => {

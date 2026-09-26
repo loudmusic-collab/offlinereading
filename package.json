@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "e2e": "node scripts/e2e-offline.mjs",
+    "e2e": "vite build && node scripts/e2e-offline.mjs",
+    "fixtures": "node scripts/fixture-server.mjs",
+    "icons": "node scripts/make-icons.mjs",
     "verify:feed": "node scripts/verify-feed.mjs"
   },
   "engines": {
