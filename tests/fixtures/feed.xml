@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet title="XSL_formatting" type="text/xsl" href="/shared/bsp/xsl/rss/nolsol.xsl"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title><![CDATA[Fixture News - Home]]></title>
+    <description><![CDATA[Fixture News - Home]]></description>
+    <link>{{ORIGIN}}/news</link>
+    <generator>RSS for Node</generator>
+    <lastBuildDate>{{DATE0}}</lastBuildDate>
+    <atom:link href="{{ORIGIN}}/feed.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title><![CDATA[Coastal towns brace for record spring tides]]></title>
+      <description><![CDATA[Flood defences are being tested as forecasters warn of the highest tides in two decades.]]></description>
+      <link>{{ORIGIN}}/news/articles/tides?at_medium=RSS&amp;at_campaign=rss</link>
+      <guid isPermaLink="false">{{ORIGIN}}/news/articles/tides#0</guid>
+      <pubDate>{{DATE0}}</pubDate>
+      <dc:creator>Jane Marlow</dc:creator>
+      <media:thumbnail width="240" height="135" url="{{ORIGIN}}/img/thumb-tides.png"/>
+    </item>
+    <item>
+      <title><![CDATA[Night trains return to three European routes]]></title>
+      <description><![CDATA[<p>Operators say demand for <b>sleeper services</b> has doubled since 2022.</p><script>alert(1)</script>]]></description>
+      <link>{{ORIGIN}}/news/articles/night-trains</link>
+      <guid isPermaLink="true">{{ORIGIN}}/news/articles/night-trains</guid>
+      <pubDate>{{DATE1}}</pubDate>
+      <media:content url="{{ORIGIN}}/img/small-train.png" medium="image" width="140"/>
+      <media:content url="{{ORIGIN}}/img/hero-train.png" medium="image" width="800"/>
+    </item>
+    <item>
+      <title><![CDATA[Markets rally after surprise rate decision]]></title>
+      <description><![CDATA[Shares rose sharply after the central bank held rates.]]></description>
+      <link>{{ORIGIN}}/blocked/markets</link>
+      <guid isPermaLink="true">{{ORIGIN}}/blocked/markets</guid>
+      <pubDate>{{DATE2}}</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[Inside the race to map the deep ocean floor]]></title>
+      <description><![CDATA[Less than a third of the seabed has been surveyed in detail.]]></description>
+      <link>{{ORIGIN}}/news/articles/botwall</link>
+      <guid isPermaLink="true">{{ORIGIN}}/news/articles/botwall</guid>
+      <pubDate>{{DATE3}}</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[An old story that should be ignored]]></title>
+      <description><![CDATA[Published long ago.]]></description>
+      <link>{{ORIGIN}}/news/articles/ancient</link>
+      <pubDate>Mon, 01 Jan 2001 10:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
