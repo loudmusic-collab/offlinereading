@@ -24,6 +24,11 @@ const ALLOWED_TYPES = [
   /^image\//i,
 ];
 
+// Marks every response that really came from this handler, so the client can
+// tell "the publisher refused" apart from "something in front of the proxy
+// (e.g. hosting-level password protection) refused before we ran".
+export const PROXY_MARKER = 'x-offline-news-proxy';
+
 const UPSTREAM_HEADERS = {
   // A mainstream UA: several publishers serve an empty shell to unknown bots.
   'user-agent':
@@ -36,7 +41,7 @@ const UPSTREAM_HEADERS = {
 function json(status, body) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', [PROXY_MARKER]: '1' },
   });
 }
 
@@ -170,6 +175,7 @@ export async function handleProxy(request, { allowPrivate = false, fetchImpl = f
       headers: {
         'content-type': type || 'application/octet-stream',
         'x-final-url': url.href,
+        [PROXY_MARKER]: '1',
         'cache-control': upstream.ok ? 'public, max-age=300' : 'no-store',
         'x-content-type-options': 'nosniff',
         'content-security-policy': "default-src 'none'; sandbox",

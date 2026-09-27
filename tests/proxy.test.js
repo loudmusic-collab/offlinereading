@@ -29,6 +29,7 @@ describe('proxy', () => {
     const res = await call('http://1.1.1.1/a', fetchImpl);
     expect(res.status).toBe(200);
     expect(res.headers.get('x-final-url')).toBe('http://1.1.1.1/b');
+    expect(res.headers.get('x-offline-news-proxy')).toBe('1');
     expect(await res.text()).toBe('<html>ok</html>');
   });
 
@@ -47,6 +48,8 @@ describe('proxy', () => {
 
   it('passes upstream error statuses through', async () => {
     const blocked = async () => new Response('no', { status: 403, headers: { 'content-type': 'text/html' } });
-    expect((await call('http://1.1.1.1/', blocked)).status).toBe(403);
+    const res = await call('http://1.1.1.1/', blocked);
+    expect(res.status).toBe(403);
+    expect(res.headers.get('x-offline-news-proxy')).toBe('1'); // publisher refusal, not ours
   });
 });

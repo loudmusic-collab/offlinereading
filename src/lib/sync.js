@@ -3,7 +3,7 @@ import { getArticleIds, getMeta, getSettings, putArticle, setMeta } from './db.j
 import { extractArticle } from './extract.js';
 import { parseFeed } from './feeds.js';
 import { downloadImage, resizeImage } from './images.js';
-import { HttpError, OfflineError, fetchViaProxy, isOnline } from './net.js';
+import { HttpError, OfflineError, ProxyUnreachableError, fetchViaProxy, isOnline } from './net.js';
 import { pruneStories } from './prune.js';
 import { sanitizeHTML } from './sanitize.js';
 
@@ -64,7 +64,7 @@ async function downloadStory({ item, feed }, settings, signal) {
     extraction = extractArticle(await res.text(), pageUrl);
     if (!extraction.ok) note = extraction.reason;
   } catch (err) {
-    if (err.name === 'AbortError' || err instanceof OfflineError) throw err;
+    if (err.name === 'AbortError' || err instanceof OfflineError || err instanceof ProxyUnreachableError) throw err;
     note = describeError(err);
   }
 
@@ -157,6 +157,11 @@ export async function syncNow({ onProgress = () => {}, signal } = {}) {
           return { feed, items: parsed.items };
         } catch (err) {
           if (sig.aborted) throw sig.reason;
+          // Not the publisher's fault: stop instead of blaming every feed.
+          if (err instanceof ProxyUnreachableError) {
+            controller.abort(err);
+            throw err;
+          }
           failedFeeds.push({ name: feed.name, error: describeError(err) });
           return null;
         } finally {
@@ -202,6 +207,10 @@ export async function syncNow({ onProgress = () => {}, signal } = {}) {
           } else if (!record.extracted) fallback++;
         } catch (err) {
           if (sig.aborted) throw sig.reason;
+          if (err instanceof ProxyUnreachableError) {
+            controller.abort(err);
+            throw err;
+          }
           failed++;
           console.warn('Story failed', entry.item.link, err);
         }
@@ -218,7 +227,7 @@ export async function syncNow({ onProgress = () => {}, signal } = {}) {
     await setMeta('lastSync', Date.now());
     return { added: total - failed - skipped, fallback, skipped, failed, pruned, failedFeeds, feedCount: feeds.length };
   } catch (err) {
-    if (sig.aborted && sig.reason instanceof OfflineError) throw sig.reason;
+    if (sig.aborted && (sig.reason instanceof OfflineError || sig.reason instanceof ProxyUnreachableError)) throw sig.reason;
     throw err;
   } finally {
     globalThis.removeEventListener?.('offline', onOffline);

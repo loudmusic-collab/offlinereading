@@ -8,7 +8,7 @@ export async function downloadImage(url, { maxDim, signal } = {}) {
     if (!blob.type.startsWith('image/') || blob.size === 0) return null;
     return maxDim ? await resizeImage(blob, maxDim) : blob;
   } catch (err) {
-    if (err.name === 'AbortError' || err.name === 'OfflineError') throw err;
+    if (err.name === 'AbortError' || err.name === 'OfflineError' || err.name === 'ProxyUnreachableError') throw err;
     return null;
   }
 }
