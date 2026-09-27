@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { handleProxy } from './server/proxy.js';
@@ -57,7 +58,24 @@ function cspPlugin() {
   };
 }
 
+// Shown in Settings so it's obvious which build a phone is running.
+// Netlify sets COMMIT_REF during builds; fall back to git locally.
+function buildVersion() {
+  let commit = process.env.COMMIT_REF;
+  if (!commit) {
+    try {
+      commit = execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    } catch {
+      commit = 'dev';
+    }
+  }
+  return `${commit.slice(0, 7)} · built ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(buildVersion()),
+  },
   plugins: [
     proxyMiddleware(),
     cspPlugin(),

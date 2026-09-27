@@ -168,6 +168,8 @@ export async function handleProxy(request, { allowPrivate = false, fetchImpl = f
     }
 
     const body = upstream.body ? await readCapped(upstream.body, MAX_BYTES) : new Uint8Array();
+    // Shows up in the hosting provider's function logs (Netlify: Logs → Functions).
+    console.log(`${upstream.status} ${type.split(';')[0] || '-'} ${body.byteLength}B ${url.href}`);
     return new Response(request.method === 'HEAD' ? null : body, {
       // Pass the upstream status through so the client can tell "blocked"
       // (401/403/429) apart from a proxy failure.
@@ -183,6 +185,7 @@ export async function handleProxy(request, { allowPrivate = false, fetchImpl = f
     });
   } catch (err) {
     const status = err.status || (err.name === 'TimeoutError' ? 504 : 502);
+    console.warn(`${status} ${err.message} ${url.href}`);
     return json(status, { error: err.message || 'Upstream fetch failed' });
   }
 }

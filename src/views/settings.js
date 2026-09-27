@@ -89,6 +89,7 @@ export function renderSettings(root) {
         <h2>About</h2>
         <p class="sw-status muted"></p>
         <p class="last-sync muted"></p>
+        <p class="app-version muted"></p>
       </section>
     </main>`;
 
@@ -147,6 +148,7 @@ export function renderSettings(root) {
     $('.sw-status').textContent = reg?.active
       ? '✓ App is installed for offline use — it opens without a connection.'
       : 'Offline app shell not installed yet (it installs automatically on first load over HTTPS).';
+    $('.app-version').textContent = `Version ${typeof __APP_VERSION__ === 'undefined' ? 'dev' : __APP_VERSION__}`;
     $('.last-sync').textContent = lastSync ? `Last synced ${timeAgo(lastSync)} (${formatDate(lastSync)}).` : 'Not synced yet.';
   }
 
