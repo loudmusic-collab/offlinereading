@@ -1,5 +1,5 @@
 import { openDB } from 'idb';
-import { DEFAULT_FEEDS, DEFAULT_SETTINGS, FEEDS_VERSION } from './config.js';
+import { DEFAULT_CATEGORY, DEFAULT_FEEDS, DEFAULT_SETTINGS, FEEDS_VERSION } from './config.js';
 
 const DB_NAME = 'offline-news-reader';
 const DB_VERSION = 1;
@@ -8,7 +8,7 @@ const DB_VERSION = 1;
  * articles store — one record per story:
  *   id, title, author, publishDate, feedSource, articleHTML, heroImageBlob,
  *   syncedAt, readStatus ('unread' | 'read')
- * plus: link, feedId, extracted, extractionNote, thumbnailBlob,
+ * plus: category, link, feedId, extracted, extractionNote, thumbnailBlob,
  *   inlineImages (Array<Blob|null>, indexed by data-offline-img), sizeBytes
  */
 let dbPromise;
@@ -70,17 +70,35 @@ export async function setReadStatus(id, readStatus) {
   return article;
 }
 
+const V1_FEED_IDS = ['bbc', 'guardian', 'reuters', 'nyt', 'ap'];
+const V2_FEED_IDS = [...V1_FEED_IDS, 'npr', 'aljazeera', 'dw'];
+
 /**
- * v1 → v2: add the new free-to-read defaults and switch off NYT, Reuters and
- * AP. Feeds the user added, removed or renamed are otherwise left alone.
+ * Upgrade settings saved by older versions. Feeds the user added or removed
+ * are left alone; only feeds new in each version are added.
+ *   v1 → v2: add NPR, Al Jazeera, DW; switch off NYT, Reuters, AP.
+ *   v2 → v3: give every feed a category; add the per-section feeds.
+ * Returns null when nothing needs to change.
  */
-export function migrateFeeds(stored) {
+export function migrateSettings(stored) {
   if (!stored.feeds || (stored.feedsVersion || 1) >= FEEDS_VERSION) return null;
-  const turnedOff = new Set(['nyt', 'reuters', 'ap']);
-  const feeds = stored.feeds.map((f) => (turnedOff.has(f.id) ? { ...f, enabled: false } : f));
-  for (const id of ['npr', 'aljazeera', 'dw']) {
-    const feed = DEFAULT_FEEDS.find((d) => d.id === id);
-    if (!feeds.some((f) => f.id === id || f.url === feed.url)) feeds.push(feed);
+  const version = stored.feedsVersion || 1;
+  const defaults = Object.fromEntries(DEFAULT_FEEDS.map((f) => [f.id, f]));
+  let feeds = stored.feeds;
+  const addNew = (ids) => {
+    for (const id of ids) {
+      const feed = defaults[id];
+      if (!feeds.some((f) => f.id === id || f.url === feed.url)) feeds.push(feed);
+    }
+  };
+
+  if (version < 2) {
+    feeds = feeds.map((f) => (['nyt', 'reuters', 'ap'].includes(f.id) ? { ...f, enabled: false } : f));
+    addNew(['npr', 'aljazeera', 'dw']);
+  }
+  if (version < 3) {
+    feeds = feeds.map((f) => ({ ...f, category: f.category || defaults[f.id]?.category || DEFAULT_CATEGORY }));
+    addNew(DEFAULT_FEEDS.map((f) => f.id).filter((id) => !V2_FEED_IDS.includes(id)));
   }
   return { ...stored, feeds, feedsVersion: FEEDS_VERSION };
 }
@@ -88,12 +106,17 @@ export function migrateFeeds(stored) {
 export async function getSettings() {
   const db = await getDB();
   let stored = (await db.get('kv', 'settings')) || {};
-  const migrated = migrateFeeds(stored);
+  const migrated = migrateSettings(stored);
   if (migrated) {
     stored = migrated;
     await db.put('kv', stored, 'settings');
   }
-  return { ...DEFAULT_SETTINGS, ...stored };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    // New categories added in later versions get their default quota.
+    categoryQuotas: { ...DEFAULT_SETTINGS.categoryQuotas, ...stored.categoryQuotas },
+  };
 }
 
 export async function saveSettings(patch) {

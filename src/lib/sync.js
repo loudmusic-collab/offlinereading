@@ -1,5 +1,14 @@
-import { HERO_MAX_DIM, INLINE_MAX_DIM, MAX_AGE_MS, MAX_INLINE_IMAGES, THUMB_MAX_DIM } from './config.js';
-import { getArticleIds, getMeta, getSettings, putArticle, setMeta } from './db.js';
+import {
+  CATEGORIES,
+  DEFAULT_CATEGORY,
+  HERO_MAX_DIM,
+  INLINE_MAX_DIM,
+  MAX_AGE_MS,
+  MAX_INLINE_IMAGES,
+  THUMB_MAX_DIM,
+  categoryOf,
+} from './config.js';
+import { getAllArticles, getMeta, getSettings, putArticle, setMeta } from './db.js';
 import { extractArticle } from './extract.js';
 import { parseFeed } from './feeds.js';
 import { downloadImage, resizeImage } from './images.js';
@@ -21,29 +30,45 @@ async function mapLimit(items, limit, fn) {
 }
 
 /**
- * Pick which stories to keep: round-robin across feeds, newest first, so one
- * prolific feed can't crowd the others out. Returns the ones not yet stored.
+ * Pick which stories to keep. Per category (in tab order), round-robin across
+ * that category's feeds, newest first, up to the category's quota, so one
+ * prolific feed can't crowd the others out. A story listed in several feeds
+ * is counted once, in the first category that picks it. Stories already
+ * stored fill their category's slots but aren't returned.
+ * @param {Array<{ feed, items }>} feedResults
+ * @param {Map<string, string>} existing  stored story id → its category
+ * @param {Record<string, number>} quotas
  */
-export function selectStories(feedResults, existingIds, maxStories, now = Date.now(), excludedIds = new Set()) {
-  const queues = feedResults.map(({ feed, items }) =>
-    items
-      .filter((it) => !excludedIds.has(it.id) && (!it.publishDate || now - it.publishDate < MAX_AGE_MS))
-      .sort((a, b) => (b.publishDate || 0) - (a.publishDate || 0))
-      .map((item) => ({ item, feed })),
-  );
+export function selectStories(feedResults, existing, quotas, now = Date.now(), excludedIds = new Set()) {
   const seen = new Set();
   const picked = [];
-  while (picked.length < maxStories && queues.some((q) => q.length)) {
-    for (const q of queues) {
-      if (picked.length >= maxStories) break;
-      let entry;
-      while ((entry = q.shift()) && seen.has(entry.item.id));
-      if (!entry) continue;
-      seen.add(entry.item.id);
-      picked.push(entry);
+  for (const { id: category } of CATEGORIES) {
+    const quota = Number(quotas[category]) || 0;
+    const queues = feedResults
+      .filter(({ feed }) => (feed.category || DEFAULT_CATEGORY) === category)
+      .map(({ feed, items }) =>
+        items
+          .filter((it) => !excludedIds.has(it.id) && (!it.publishDate || now - it.publishDate < MAX_AGE_MS))
+          .sort((a, b) => (b.publishDate || 0) - (a.publishDate || 0))
+          .map((item) => ({ item, feed, category })),
+      );
+    let count = 0;
+    while (count < quota && queues.some((q) => q.length)) {
+      for (const q of queues) {
+        if (count >= quota) break;
+        let entry;
+        while (
+          (entry = q.shift()) &&
+          (seen.has(entry.item.id) || (existing.has(entry.item.id) && existing.get(entry.item.id) !== category))
+        );
+        if (!entry) continue;
+        seen.add(entry.item.id);
+        count++;
+        if (!existing.has(entry.item.id)) picked.push(entry);
+      }
     }
   }
-  return picked.filter(({ item }) => !existingIds.has(item.id));
+  return picked;
 }
 
 function describeError(err) {
@@ -54,7 +79,7 @@ function describeError(err) {
   return err?.message || 'failed';
 }
 
-async function downloadStory({ item, feed }, settings, signal) {
+async function downloadStory({ item, feed, category }, settings, signal) {
   let extraction = null;
   let pageUrl = item.link;
   let note = '';
@@ -106,6 +131,7 @@ async function downloadStory({ item, feed }, settings, signal) {
     publishDate: item.publishDate || extraction?.publishedTime || Date.now(),
     feedSource: feed.name,
     feedId: feed.id,
+    category,
     link: item.link,
     articleHTML: clean.html,
     extracted: useFull,
@@ -143,14 +169,19 @@ export async function syncNow({ onProgress = () => {}, signal } = {}) {
 
   try {
     const settings = await getSettings();
-    const feeds = settings.feeds.filter((f) => f.enabled);
-    if (!feeds.length) throw new Error('No feeds enabled — add one in Settings');
+    const quotas = settings.categoryQuotas;
+    // Feeds of categories set to 0 aren't fetched at all.
+    const feeds = settings.feeds.filter((f) => f.enabled && Number(quotas[f.category || DEFAULT_CATEGORY]) > 0);
+    if (!feeds.length) throw new Error('No feeds enabled — check Settings');
+    const feedsById = Object.fromEntries(settings.feeds.map((f) => [f.id, f]));
+    const storedCategories = async () =>
+      new Map((await getAllArticles()).map((a) => [a.id, categoryOf(a, feedsById)]));
 
     let feedsDone = 0;
     onProgress({ phase: 'feeds', done: 0, total: feeds.length, label: `Checking feeds (0 of ${feeds.length})…` });
     const failedFeeds = [];
     const feedResults = (
-      await mapLimit(feeds, 3, async (feed) => {
+      await mapLimit(feeds, 6, async (feed) => {
         try {
           const res = await fetchViaProxy(feed.url, { signal: sig });
           const parsed = parseFeed(await res.text(), feed.url);
@@ -189,7 +220,7 @@ export async function syncNow({ onProgress = () => {}, signal } = {}) {
     // Skipped stories free up their slots, so backfill with the next-newest
     // ones (a couple of extra rounds at most).
     for (let round = 0; round < 3; round++) {
-      const todo = selectStories(feedResults, await getArticleIds(), settings.maxStories, now, excluded()).filter(
+      const todo = selectStories(feedResults, await storedCategories(), quotas, now, excluded()).filter(
         ({ item }) => !attempted.has(item.id),
       );
       if (!todo.length) break;

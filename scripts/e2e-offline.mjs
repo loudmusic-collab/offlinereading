@@ -61,16 +61,18 @@ try {
   check(true, 'service worker installed and controlling the page');
 
   await page.click('a[href="#/settings"]');
-  await page.waitForSelector('.feed');
+  await page.waitForSelector('.feed', { state: 'attached' });
+  check((await page.locator('.quota').count()) === 9, 'settings: stories-per-category controls for 9 categories');
+  // Default feeds sit in collapsed category groups, so click via the DOM.
   while (await page.locator('.remove-feed').count()) {
     const before = await page.locator('.remove-feed').count();
-    await page.locator('.remove-feed').first().click();
+    await page.evaluate(() => document.querySelector('.remove-feed').click());
     await page.waitForFunction((n) => document.querySelectorAll('.remove-feed').length < n, before);
   }
   await page.fill('input[name=name]', 'Fixture News');
   await page.fill('input[name=url]', `${fixture.origin}/feed.xml`);
   await page.click('.add-feed button[type=submit]');
-  await page.waitForSelector('.feed');
+  await page.waitForSelector('.feed', { state: 'attached' });
   check((await page.locator('.feed').count()) === 1, 'settings: one feed configured');
 
   await page.click('a[aria-label="Back to stories"]');
@@ -151,6 +153,7 @@ try {
   // ---------- Second feed (Atom), synced with pull-to-refresh ----------
   await page.fill('input[name=name]', 'Atom Wire');
   await page.fill('input[name=url]', `${fixture.origin}/atom.xml`);
+  await page.selectOption('select[name=category]', 'tech');
   await page.click('.add-feed button[type=submit]');
   await page.waitForFunction(() => document.querySelectorAll('.feed').length === 2);
   await page.click('a[aria-label="Back to stories"]');
@@ -174,21 +177,31 @@ try {
   await page.click('.chip[data-source="Atom Wire"]');
   check((await page.locator('.story').count()) === 2, 'filtering by source works');
   await page.click('.chip[data-source="Atom Wire"]');
+
+  // Category tabs
+  const tabs = await page.locator('.cat-tab').allTextContents();
+  check(tabs[0].startsWith('All') && tabs.some((t) => t.startsWith('Tech')), `category tabs: ${tabs.map((t) => t.replace(/\d+$/, '')).join(', ')}`);
+  await page.click('.cat-tab[data-cat="tech"]');
+  check((await page.locator('.story').count()) === 2, 'Tech tab shows only the Tech feed’s 2 stories');
+  await page.click('.cat-tab[data-cat="top"]');
+  check((await page.locator('.story').count()) === 4, 'Top tab shows the 4 Top stories');
+  await page.click('.cat-tab[data-cat="all"]');
+  check((await page.locator('.story-cat').count()) === 6, 'All tab labels each story with its category');
   await shot(page, '4b-list-two-feeds');
 
   // ---------- Lower the cap: read stories are pruned first ----------
   await page.goto(`${APP}#/settings`);
-  await page.waitForSelector('.max-stories');
-  await page.waitForFunction(() => document.querySelector('.max-stories').value === '50');
-  await page.fill('.max-stories', '5');
-  await page.locator('.max-stories').dispatchEvent('change');
+  await page.waitForFunction(() => document.querySelector('.quota[data-cat="top"]')?.value === '10');
+  await shot(page, '4c-settings-categories');
+  await page.fill('.quota[data-cat="top"]', '3');
+  await page.locator('.quota[data-cat="top"]').dispatchEvent('change');
   await page.waitForFunction(() => /Stories\s*5/.test(document.querySelector('.stats').textContent));
   await page.goto(APP);
   await page.waitForFunction(() => document.querySelectorAll('.story').length === 5);
   const remaining = await page.locator('.story-title').allTextContents();
   check(
     !remaining.some((t) => t.includes('rate decision')) && remaining.some((t) => t.includes('spring tides')),
-    'max 5 stories: the oldest read story was pruned first',
+    'Top limited to 3: the oldest read Top story was pruned first',
   );
 
   // ---------- Airplane mode ----------
@@ -215,6 +228,9 @@ try {
   check(await page.locator('.sync-btn').isDisabled(), 'sync disabled while offline');
   check((await page.locator('.story.read').count()) === 1, 'read status persisted (opened story still marked read)');
   await shot(page, '5-list-offline');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await shot(page, '5b-list-offline-dark');
+  await page.emulateMedia({ colorScheme: 'light' });
 
   await page.locator('.story a', { hasText: 'Night trains' }).click();
   await page.waitForSelector('.reader .content p');
@@ -225,7 +241,7 @@ try {
   // A brand-new tab, opened while offline, must also boot from the SW.
   const fresh = await context.newPage();
   await fresh.goto(`${APP}#/settings`);
-  await fresh.waitForSelector('.feed');
+  await fresh.waitForSelector('.feed', { state: 'attached' });
   check(true, 'new tab opened offline boots from the service worker');
   await fresh.close();
 

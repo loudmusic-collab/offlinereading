@@ -86,8 +86,8 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['icons/*.svg', 'icons/*.png'],
       manifest: {
-        name: 'Offline News Reader',
-        short_name: 'Offline News',
+        name: 'News from the Void',
+        short_name: 'Void News',
         description: 'Download the news while online, read it anywhere — even in airplane mode.',
         start_url: '/',
         scope: '/',

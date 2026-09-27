@@ -1,4 +1,4 @@
-# Offline News Reader
+# News from the Void
 
 A mobile-first PWA that downloads full article text and images while you're online, stores them in IndexedDB, and lets you read them with **zero network access** — airplane mode included.
 
@@ -9,12 +9,14 @@ A mobile-first PWA that downloads full article text and images while you're onli
 
 | | |
 |---|---|
-| **Feeds** | BBC News, The Guardian, NPR, Al Jazeera and DW are on by default. NY Times, Reuters and AP are in the list but switched off. You can add, remove or toggle feeds in Settings. RSS 2.0, RSS 1.0/RDF and Atom are supported. |
+| **Categories** | SmartNews-style coloured tabs across the top: All, Top, World, U.S., Business, Tech, Science, Health, Sports and Entertainment. Swipe left/right on the list to move between them. In the All tab each story is labelled with its category. |
+| **Stories per category** | Settings sets how many stories to keep per category (defaults add up to 50). A category set to 0 is hidden and its feeds aren't fetched. |
+| **Feeds** | Each feed belongs to a category. The defaults are BBC, Guardian and NPR section feeds, plus Al Jazeera and DW; NY Times, Reuters and AP are listed but switched off. You can add feeds (choosing a category), remove or toggle them in Settings. RSS 2.0, RSS 1.0/RDF and Atom are supported. |
 | **Sync now** | Button or pull-to-refresh. Fetches each feed, downloads each article through the proxy, runs Readability and falls back to the RSS summary if extraction fails. It also downloads the hero image and up to 6 inline images, resized to JPEG, plus a thumbnail. Progress shows as "Downloading 12 of 40…". |
 | **Story list** | Thumbnail, title, source, relative date, unread dot, day headings, All/Unread and per-source filters. A "Summary" badge marks stories where only the feed summary was saved. |
 | **Reader** | Serif typography, adjustable text size, images rendered from stored blobs, marked as read when opened (you can mark it unread again), and a notice explaining why a story is summary-only. |
 | **Full articles only** | On by default. Stories whose full text can't be downloaded (paywalls, blocked sites) are skipped instead of saved as a summary. Their slots are backfilled with the next-newest stories, and they aren't retried for a week. Turn it off in Settings to keep summary-only stories. |
-| **Settings** | Manage feeds, set the maximum stored stories (default 50) and toggle full-articles-only and image downloads. It also shows storage in use (text vs images, plus the browser's quota estimate), with "Clean up now" and "Delete all" buttons. |
+| **Settings** | Stories per category, feeds grouped by category, and toggles for full-articles-only and image downloads. It also shows storage in use (text vs images, plus the browser's quota estimate), with "Clean up now" and "Delete all" buttons. |
 | **Offline shell** | The service worker precaches the whole app shell, so the app opens with no connectivity. |
 | **Auto-prune** | Runs after every sync and on app start. See [Storage limits](#storage-limits). |
 
@@ -89,7 +91,7 @@ With **Full articles only** on (the default), those stories are skipped. With it
 ### Storage limits
 
 - Stories older than **7 days** are deleted, read or not. Stories already older than that are never downloaded.
-- Over the **max story count**, deletion order is **read stories oldest-first, then unread oldest-first**, so unread stories survive longer.
+- Each **category is trimmed to its story count**, in the order **read stories oldest-first, then unread oldest-first**, so unread stories survive longer.
 - The same order applies under **storage pressure**: a hard 250 MB app budget, tightened to stay under 80% of the quota from `navigator.storage.estimate()`.
 - Images are downscaled before storage (hero ≤1200px, inline ≤1000px, thumbnail 240px, JPEG q≈0.8). A typical story costs roughly 100–300 KB with images, or 5–30 KB without.
 - After a sync the app calls `navigator.storage.persist()` so the browser doesn't evict stories.
@@ -110,18 +112,32 @@ It is still a fetcher anyone can call directly. If that matters for your deploym
 
 ## Default feeds — caveats
 
-| Source | URL | Default | Notes |
-|---|---|---|---|
-| BBC News | `https://feeds.bbci.co.uk/news/rss.xml` | on | Official, free to read |
-| The Guardian | `https://www.theguardian.com/world/rss` | on | Official, free to read |
-| NPR | `https://feeds.npr.org/1001/rss.xml` | on | Official, free to read |
-| Al Jazeera | `https://www.aljazeera.com/xml/rss/all.xml` | on | Official, free to read |
-| DW News | `https://rss.dw.com/rdf/rss-en-all` | on | Official (RSS 1.0/RDF), free to read |
-| NY Times | `https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml` | off | Paywalled: the server only gets a teaser, so most stories are summary-only. |
-| Reuters | `https://www.reutersagency.com/feed/?best-topics=top-news&post_type=best` | off | **No official public RSS since 2020.** This is the Reuters Agency feed and may change or disappear. Pages are bot-protected. |
-| AP News | `https://rsshub.app/apnews/topics/apf-topnews` | off | **No official public RSS.** Goes through the rate-limited public RSSHub instance. Pages are often bot-protected. |
+All default feeds are defined in `src/lib/config.js` (`DEFAULT_FEEDS`, with the category tabs in `CATEGORIES`).
 
-Existing installs are migrated once (`feedsVersion` 2). NPR, Al Jazeera and DW are added and NYT, Reuters and AP are switched off. Feeds you added or removed yourself are left alone.
+| Category | Feeds |
+|---|---|
+| Top | BBC News, NPR News, DW News (NY Times, Reuters, AP off) |
+| World | The Guardian World, BBC World, Al Jazeera, NPR World |
+| U.S. | NPR National, Guardian US, BBC US & Canada |
+| Business | BBC, Guardian, NPR business |
+| Tech | BBC, Guardian, NPR technology |
+| Science | BBC Science & Environment, Guardian, NPR science |
+| Health | BBC, NPR health |
+| Sports | BBC Sport, Guardian sport |
+| Entertainment | BBC Entertainment & Arts, Guardian Culture, NPR Arts |
+
+Off by default:
+
+- **NY Times** is paywalled, so the server only gets a teaser and most stories are summary-only.
+- **Reuters** has had **no official public RSS since 2020**. The URL is the Reuters Agency feed, which may change or disappear, and pages are bot-protected.
+- **AP** has **no official public RSS**. The URL goes through the rate-limited public RSSHub instance, and pages are often bot-protected.
+
+Existing installs are migrated when they load a new version (`migrateSettings` in `src/lib/db.js`):
+
+- **v2** adds NPR, Al Jazeera and DW, and switches NYT, Reuters and AP off.
+- **v3** gives every feed a category (custom feeds go to Top) and adds the per-section feeds.
+
+Feeds you added or removed yourself are left alone.
 
 Other free-to-read feeds worth trying: France 24 (`https://www.france24.com/en/rss`), CBC (`https://www.cbc.ca/webfeed/rss/rss-topstories`), ABC Australia (`https://www.abc.net.au/news/feed/51120/rss.xml`) and PBS NewsHour (`https://www.pbs.org/newshour/feeds/rss/headlines`).
 

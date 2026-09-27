@@ -1,4 +1,4 @@
-import { MAX_AGE_MS, STORAGE_BUDGET_BYTES } from './config.js';
+import { MAX_AGE_MS, STORAGE_BUDGET_BYTES, categoryOf } from './config.js';
 import { deleteArticles, getAllArticles, getSettings, storyDate } from './db.js';
 
 export function articleSize(a) {
@@ -13,10 +13,17 @@ export function articleSize(a) {
 /**
  * Decide which stories to delete.
  *  1. Anything older than maxAgeMs goes, read or not.
- *  2. If still over maxStories or byteBudget, trim read stories oldest-first,
- *     and only then unread stories oldest-first — unread survive longer.
+ *  2. Each category is trimmed to its quota (0 = keep none): read stories
+ *     oldest-first, and only then unread stories oldest-first.
+ *  3. If still over byteBudget, the same order applies across everything.
+ * @param {object} opts
+ * @param {Record<string, number>} opts.quotas  stories to keep per category
+ * @param {(a: object) => string} [opts.categoryOf]
  */
-export function selectForPrune(articles, { maxStories, byteBudget = Infinity, maxAgeMs = MAX_AGE_MS, now = Date.now() }) {
+export function selectForPrune(
+  articles,
+  { quotas, categoryOf = (a) => a.category, byteBudget = Infinity, maxAgeMs = MAX_AGE_MS, now = Date.now() },
+) {
   const doomed = [];
   const keep = [];
   for (const a of articles) {
@@ -25,17 +32,29 @@ export function selectForPrune(articles, { maxStories, byteBudget = Infinity, ma
   }
 
   const oldestFirst = (x, y) => storyDate(x) - storyDate(y);
-  const order = [
-    ...keep.filter((a) => a.readStatus === 'read').sort(oldestFirst),
-    ...keep.filter((a) => a.readStatus !== 'read').sort(oldestFirst),
+  const deletionOrder = (list) => [
+    ...list.filter((a) => a.readStatus === 'read').sort(oldestFirst),
+    ...list.filter((a) => a.readStatus !== 'read').sort(oldestFirst),
   ];
 
-  let count = keep.length;
-  let bytes = keep.reduce((sum, a) => sum + articleSize(a), 0);
-  for (const a of order) {
-    if (count <= maxStories && bytes <= byteBudget) break;
+  const byCategory = new Map();
+  for (const a of keep) {
+    const cat = categoryOf(a);
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat).push(a);
+  }
+  const survivors = [];
+  for (const [cat, list] of byCategory) {
+    const order = deletionOrder(list);
+    const excess = Math.max(0, list.length - (Number(quotas[cat]) || 0));
+    order.slice(0, excess).forEach((a) => doomed.push(a.id));
+    survivors.push(...order.slice(excess));
+  }
+
+  let bytes = survivors.reduce((sum, a) => sum + articleSize(a), 0);
+  for (const a of deletionOrder(survivors)) {
+    if (bytes <= byteBudget) break;
     doomed.push(a.id);
-    count -= 1;
     bytes -= articleSize(a);
   }
   return doomed;
@@ -61,7 +80,13 @@ export async function currentByteBudget(articles) {
 export async function pruneStories({ now = Date.now() } = {}) {
   const [articles, settings] = await Promise.all([getAllArticles(), getSettings()]);
   const byteBudget = await currentByteBudget(articles);
-  const ids = selectForPrune(articles, { maxStories: settings.maxStories, byteBudget, now });
+  const feedsById = Object.fromEntries(settings.feeds.map((f) => [f.id, f]));
+  const ids = selectForPrune(articles, {
+    quotas: settings.categoryQuotas,
+    categoryOf: (a) => categoryOf(a, feedsById),
+    byteBudget,
+    now,
+  });
   await deleteArticles(ids);
   return ids.length;
 }

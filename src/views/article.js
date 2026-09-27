@@ -1,4 +1,5 @@
-import { getArticle, setReadStatus } from '../lib/db.js';
+import { APP_NAME, CATEGORY_BY_ID, categoryOf } from '../lib/config.js';
+import { getArticle, getSettings, setReadStatus } from '../lib/db.js';
 import { sanitizeHTML } from '../lib/sanitize.js';
 import { storiesChanged } from '../state.js';
 import { BlobUrls, esc, formatDate, hostname } from '../ui/dom.js';
@@ -77,7 +78,10 @@ export function renderArticle(root, id) {
     }
 
     root.querySelector('.reader-bar-title').textContent = article.feedSource;
-    document.title = `${article.title} · Offline News`;
+    document.title = `${article.title} · ${APP_NAME}`;
+    const settings = await getSettings();
+    const category = CATEGORY_BY_ID[categoryOf(article, Object.fromEntries(settings.feeds.map((f) => [f.id, f])))];
+    if (disposed) return;
 
     const hero = blobs.get(article.heroImageBlob);
     // Stored HTML was sanitised at sync time; sanitise again on the way out in
@@ -89,7 +93,7 @@ export function renderArticle(root, id) {
       <article class="reader">
         ${hero ? `<figure class="hero"><img src="${hero}" alt=""></figure>` : ''}
         <div class="reader-inner">
-          <p class="kicker">${esc(article.feedSource)}</p>
+          <p class="kicker"><span style="color:${category.color}">${esc(category.label)}</span> · ${esc(article.feedSource)}</p>
           <h1 class="reader-title">${esc(article.title)}</h1>
           <p class="byline">
             ${article.author ? `<span>By ${esc(article.author)}</span>` : ''}
@@ -125,6 +129,6 @@ export function renderArticle(root, id) {
   return () => {
     disposed = true;
     blobs.revokeAll();
-    document.title = 'Offline News Reader';
+    document.title = APP_NAME;
   };
 }

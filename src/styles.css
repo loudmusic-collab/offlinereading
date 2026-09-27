@@ -17,6 +17,7 @@
   --ui-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --read-font: 'Iowan Old Style', 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, Georgia, serif;
   --topbar-h: 56px;
+  --tabs-h: 48px;
   color-scheme: light;
 }
 
@@ -104,15 +105,100 @@ button {
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.12rem;
   font-weight: 750;
   letter-spacing: -0.01em;
   flex: 1;
   min-width: 0;
 }
 
+.brand span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .brand svg {
+  flex: none;
   color: var(--accent);
+}
+
+/* ---------- Category tabs (SmartNews-style) ---------- */
+
+.cat-tabs {
+  position: sticky;
+  top: calc(var(--topbar-h) + env(safe-area-inset-top));
+  z-index: 9;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: var(--tabs-h);
+  padding: 0 max(8px, env(safe-area-inset-left));
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--bg);
+  border-bottom: 4px solid var(--active, var(--accent));
+}
+
+.cat-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.cat-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px 10px 0 0;
+  background: color-mix(in srgb, var(--cat) 78%, var(--bg));
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  opacity: 0.85;
+  transition:
+    height 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.cat-tab[aria-pressed='true'] {
+  height: 44px;
+  background: var(--cat);
+  opacity: 1;
+  font-size: 1rem;
+}
+
+.cat-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.25);
+  font-size: 0.72rem;
+  line-height: 18px;
+  text-align: center;
+}
+
+.story-cat {
+  color: var(--cat);
+}
+
+@media (prefers-color-scheme: dark) {
+  .story-cat {
+    color: color-mix(in srgb, var(--cat) 65%, #fff);
+  }
+}
+
+.cat-dot {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--cat);
 }
 
 .topbar-title {
@@ -190,6 +276,21 @@ button {
 
 .btn:disabled {
   opacity: 0.5;
+  cursor: default;
+}
+
+.sync-btn {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.sync-btn:hover,
+.sync-btn:focus-visible {
+  background: color-mix(in srgb, var(--accent) 85%, var(--text));
+}
+
+.sync-btn:disabled {
+  opacity: 0.45;
   cursor: default;
 }
 
@@ -311,7 +412,7 @@ button {
 
 .day-heading {
   position: sticky;
-  top: calc(var(--topbar-h) + env(safe-area-inset-top));
+  top: calc(var(--topbar-h) + var(--tabs-h) + env(safe-area-inset-top));
   z-index: 5;
   padding: 14px 16px 6px;
   background: var(--bg);
@@ -740,10 +841,112 @@ button {
   font-size: 0.95rem;
 }
 
+.card-note {
+  margin: -4px 0 12px;
+  font-size: 0.82rem;
+}
+
+.quota-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.quota-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.quota-row label {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.stepper .step {
+  width: 40px;
+  height: 40px;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.stepper input[type='number'] {
+  width: 56px;
+  min-height: 38px;
+  padding: 4px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.stepper input::-webkit-inner-spin-button,
+.stepper input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.quota-total {
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+}
+
+.feed-groups {
+  margin-bottom: 16px;
+}
+
+.feed-group {
+  border-bottom: 1px solid var(--line);
+}
+
+.feed-group summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 48px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.feed-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.feed-group summary strong {
+  line-height: 1;
+}
+
+.feed-group summary small {
+  margin-left: auto;
+  line-height: 1;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.feed-group summary::after {
+  content: '›';
+  margin-left: 10px;
+  color: var(--muted);
+  font-size: 1.3rem;
+  transition: transform 0.15s ease;
+}
+
+.feed-group[open] summary::after {
+  transform: rotate(90deg);
+}
+
 .feed-list {
   list-style: none;
-  margin: 0 0 16px;
-  padding: 0;
+  margin: 0 0 8px;
+  padding: 0 0 0 18px;
 }
 
 .feed {
@@ -786,7 +989,8 @@ button {
 
 input[type='text'],
 input[type='url'],
-input[type='number'] {
+input[type='number'],
+select {
   width: 100%;
   min-height: 44px;
   padding: 8px 12px;

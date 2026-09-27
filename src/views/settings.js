@@ -1,4 +1,4 @@
-import { DEFAULT_FEEDS, MAX_STORIES, MIN_STORIES } from '../lib/config.js';
+import { CATEGORIES, CATEGORY_BY_ID, DEFAULT_CATEGORY, DEFAULT_FEEDS, MAX_PER_CATEGORY, totalQuota } from '../lib/config.js';
 import { clearArticles, getAllArticles, getMeta, getSettings, saveSettings } from '../lib/db.js';
 import { articleSize, pruneStories } from '../lib/prune.js';
 import { storiesChanged, subscribe } from '../state.js';
@@ -44,12 +44,20 @@ export function renderSettings(root) {
     <div class="offline-banner" role="status">${icons.offline}<span>Offline — changes apply at the next sync</span></div>
     <main class="settings-main">
       <section class="card">
+        <h2>Stories per category</h2>
+        <p class="card-note muted">How many stories to keep in each tab. Set a category to 0 to hide it and stop syncing it. Read stories are removed first, and anything older than 7 days is always removed.</p>
+        <ul class="quota-list"></ul>
+        <p class="quota-total"></p>
+      </section>
+
+      <section class="card">
         <h2>Feeds</h2>
-        <ul class="feed-list"></ul>
+        <div class="feed-groups"></div>
         <form class="add-feed" novalidate>
           <h3>Add a feed</h3>
           <label>Name <input name="name" type="text" placeholder="e.g. Al Jazeera" autocomplete="off"></label>
           <label>RSS or Atom URL <input name="url" type="url" inputmode="url" placeholder="https://example.com/rss.xml" required autocomplete="off"></label>
+          <label>Category <select name="category">${CATEGORIES.map((c) => `<option value="${c.id}">${esc(c.label)}</option>`).join('')}</select></label>
           <p class="form-error" role="alert"></p>
           <div class="row">
             <button class="btn btn-primary" type="submit">Add feed</button>
@@ -60,10 +68,6 @@ export function renderSettings(root) {
 
       <section class="card">
         <h2>Downloads</h2>
-        <label class="field">
-          <span class="field-text"><strong>Maximum stored stories</strong><small>Read stories are removed first, then the oldest unread. Stories older than 7 days are always removed.</small></span>
-          <input class="max-stories" type="number" inputmode="numeric" min="${MIN_STORIES}" max="${MAX_STORIES}" step="1">
-        </label>
         <label class="field switch-field">
           <span class="field-text"><strong>Full articles only</strong><small>Skip stories whose full text can’t be downloaded (paywalls, blocked sites) instead of saving just the feed summary.</small></span>
           <input class="full-only switch" type="checkbox" role="switch">
@@ -94,16 +98,62 @@ export function renderSettings(root) {
     </main>`;
 
   const $ = (sel) => root.querySelector(sel);
-  const feedList = $('.feed-list');
+  const feedList = $('.feed-groups');
+  const quotaList = $('.quota-list');
+  const openGroups = new Set();
   const form = $('.add-feed');
   const formError = $('.form-error');
   let settings;
 
-  function paintFeeds() {
-    feedList.innerHTML = settings.feeds.length
-      ? settings.feeds
-          .map(
-            (f) => `
+  function paintQuotas() {
+    const quotas = settings.categoryQuotas;
+    quotaList.innerHTML = CATEGORIES.map(
+      (c) => `
+      <li class="quota-row">
+        <label for="quota-${c.id}"><span class="cat-dot" style="--cat:${c.color}"></span>${esc(c.label)}</label>
+        <div class="stepper">
+          <button type="button" class="icon-btn step" data-cat="${c.id}" data-step="-1" aria-label="Fewer ${esc(c.label)} stories">−</button>
+          <input id="quota-${c.id}" class="quota" data-cat="${c.id}" type="number" inputmode="numeric" min="0" max="${MAX_PER_CATEGORY}" step="1" value="${quotas[c.id] ?? 0}">
+          <button type="button" class="icon-btn step" data-cat="${c.id}" data-step="1" aria-label="More ${esc(c.label)} stories">+</button>
+        </div>
+      </li>`,
+    ).join('');
+    paintTotal();
+  }
+
+  function paintTotal() {
+    $('.quota-total').innerHTML = `Up to <strong>${totalQuota(settings.categoryQuotas)}</strong> stories in total`;
+  }
+
+  let quotaTimer;
+  async function setQuota(cat, value) {
+    const v = Math.max(0, Math.min(MAX_PER_CATEGORY, Math.round(Number(value) || 0)));
+    const input = quotaList.querySelector(`.quota[data-cat="${cat}"]`);
+    if (input) input.value = v;
+    settings = await saveSettings({ categoryQuotas: { ...settings.categoryQuotas, [cat]: v } });
+    paintTotal();
+    paintFeeds();
+    // Debounced so tapping +/- several times prunes once.
+    clearTimeout(quotaTimer);
+    quotaTimer = setTimeout(async () => {
+      const removed = await pruneStories();
+      toast(removed ? `Saved · removed ${removed} ${removed === 1 ? 'story' : 'stories'} over the new limits` : 'Saved', { duration: 1800 });
+      storiesChanged();
+    }, 600);
+  }
+
+  quotaList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.step');
+    if (!btn) return;
+    const cat = btn.dataset.cat;
+    setQuota(cat, (Number(settings.categoryQuotas[cat]) || 0) + Number(btn.dataset.step));
+  });
+  quotaList.addEventListener('change', (e) => {
+    if (e.target.matches('.quota')) setQuota(e.target.dataset.cat, e.target.value);
+  });
+
+  function feedRow(f) {
+    return `
         <li class="feed" data-id="${esc(f.id)}">
           <label class="feed-toggle">
             <input type="checkbox" class="switch" ${f.enabled ? 'checked' : ''} aria-label="Enable ${esc(f.name)}">
@@ -113,11 +163,41 @@ export function renderSettings(root) {
             <small title="${esc(f.url)}">${esc(f.url)}</small>
           </div>
           <button class="icon-btn remove-feed" type="button" aria-label="Remove ${esc(f.name)}">${icons.trash}</button>
-        </li>`,
-          )
-          .join('')
-      : '<li class="muted">No feeds. Add one below or restore the defaults.</li>';
+        </li>`;
   }
+
+  function paintFeeds() {
+    if (!settings.feeds.length) {
+      feedList.innerHTML = '<p class="muted">No feeds. Add one below or restore the defaults.</p>';
+      return;
+    }
+    feedList.innerHTML = CATEGORIES.map((c) => {
+      const feeds = settings.feeds.filter((f) => (f.category || DEFAULT_CATEGORY) === c.id);
+      if (!feeds.length) return '';
+      const on = feeds.filter((f) => f.enabled).length;
+      const hidden = !(settings.categoryQuotas[c.id] > 0);
+      return `
+        <details class="feed-group" data-cat="${c.id}" ${openGroups.has(c.id) ? 'open' : ''}>
+          <summary>
+            <span class="cat-dot" style="--cat:${c.color}"></span>
+            <strong>${esc(c.label)}</strong>
+            <small>${on} of ${feeds.length} on${hidden ? ' · category hidden' : ''}</small>
+          </summary>
+          <ul class="feed-list">${feeds.map(feedRow).join('')}</ul>
+        </details>`;
+    }).join('');
+  }
+
+  feedList.addEventListener(
+    'toggle',
+    (e) => {
+      const cat = e.target.dataset?.cat;
+      if (!cat) return;
+      if (e.target.open) openGroups.add(cat);
+      else openGroups.delete(cat);
+    },
+    true,
+  );
 
   async function paintStats() {
     const s = await storageStats();
@@ -162,6 +242,7 @@ export function renderSettings(root) {
     if (!li) return;
     const feeds = settings.feeds.map((f) => (f.id === li.dataset.id ? { ...f, enabled: e.target.checked } : f));
     await save({ feeds });
+    paintFeeds();
   });
 
   feedList.addEventListener('click', async (e) => {
@@ -191,9 +272,11 @@ export function renderSettings(root) {
       return;
     }
     const name = String(data.get('name') || '').trim() || hostname(url.href);
-    const feed = { id: `feed-${Date.now().toString(36)}`, name, url: url.href, enabled: true };
-    await save({ feeds: [...settings.feeds, feed] }, `Added ${name}`);
+    const category = CATEGORY_BY_ID[data.get('category')] ? data.get('category') : DEFAULT_CATEGORY;
+    const feed = { id: `feed-${Date.now().toString(36)}`, name, url: url.href, category, enabled: true };
+    await save({ feeds: [...settings.feeds, feed] }, `Added ${name} to ${CATEGORY_BY_ID[category].label}`);
     form.reset();
+    openGroups.add(category);
     paintFeeds();
   });
 
@@ -201,22 +284,6 @@ export function renderSettings(root) {
     const custom = settings.feeds.filter((f) => !DEFAULT_FEEDS.some((d) => d.id === f.id));
     await save({ feeds: [...DEFAULT_FEEDS, ...custom] }, 'Default feeds restored');
     paintFeeds();
-  });
-
-  const maxInput = $('.max-stories');
-  maxInput.addEventListener('change', async () => {
-    const value = Math.round(Number(maxInput.value));
-    if (!Number.isFinite(value) || value < MIN_STORIES || value > MAX_STORIES) {
-      toast(`Choose between ${MIN_STORIES} and ${MAX_STORIES} stories`);
-      maxInput.value = settings.maxStories;
-      return;
-    }
-    await save({ maxStories: value });
-    const removed = await pruneStories();
-    if (removed) {
-      toast(`Saved · removed ${removed} ${removed === 1 ? 'story' : 'stories'} over the new limit`);
-      storiesChanged();
-    }
   });
 
   $('.download-images').addEventListener('change', (e) => save({ downloadImages: e.target.checked }));
@@ -240,8 +307,8 @@ export function renderSettings(root) {
   (async () => {
     settings = await getSettings();
     if (disposed) return;
+    paintQuotas();
     paintFeeds();
-    maxInput.value = settings.maxStories;
     $('.download-images').checked = settings.downloadImages;
     $('.full-only').checked = settings.fullArticlesOnly;
     // Enable switch animations only after the initial state is painted.

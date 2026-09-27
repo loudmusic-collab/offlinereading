@@ -23,7 +23,7 @@ export class ProxyUnreachableError extends Error {
   constructor(status) {
     super(
       status === 401 || status === 403
-        ? `The sync service refused the request (HTTP ${status}). If this is a protected Netlify branch or preview deploy, open the site in your browser and sign in, or deploy it as the production site.`
+        ? `The sync service refused the request (HTTP ${status}). If the Netlify project is set to Private (or this is a protected preview deploy), make it public in Netlify or sign in first.`
         : status === 200
           ? 'The sync service returned an unexpected page. If you’re on Wi-Fi that needs a sign-in page, open a browser to sign in first.'
           : `The sync service is unavailable (HTTP ${status}). Try again in a minute.`,
