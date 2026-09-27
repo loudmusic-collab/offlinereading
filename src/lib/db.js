@@ -1,5 +1,5 @@
 import { openDB } from 'idb';
-import { DEFAULT_SETTINGS } from './config.js';
+import { DEFAULT_FEEDS, DEFAULT_SETTINGS, FEEDS_VERSION } from './config.js';
 
 const DB_NAME = 'offline-news-reader';
 const DB_VERSION = 1;
@@ -70,8 +70,29 @@ export async function setReadStatus(id, readStatus) {
   return article;
 }
 
+/**
+ * v1 → v2: add the new free-to-read defaults and switch off NYT, Reuters and
+ * AP. Feeds the user added, removed or renamed are otherwise left alone.
+ */
+export function migrateFeeds(stored) {
+  if (!stored.feeds || (stored.feedsVersion || 1) >= FEEDS_VERSION) return null;
+  const turnedOff = new Set(['nyt', 'reuters', 'ap']);
+  const feeds = stored.feeds.map((f) => (turnedOff.has(f.id) ? { ...f, enabled: false } : f));
+  for (const id of ['npr', 'aljazeera', 'dw']) {
+    const feed = DEFAULT_FEEDS.find((d) => d.id === id);
+    if (!feeds.some((f) => f.id === id || f.url === feed.url)) feeds.push(feed);
+  }
+  return { ...stored, feeds, feedsVersion: FEEDS_VERSION };
+}
+
 export async function getSettings() {
-  const stored = (await (await getDB()).get('kv', 'settings')) || {};
+  const db = await getDB();
+  let stored = (await db.get('kv', 'settings')) || {};
+  const migrated = migrateFeeds(stored);
+  if (migrated) {
+    stored = migrated;
+    await db.put('kv', stored, 'settings');
+  }
   return { ...DEFAULT_SETTINGS, ...stored };
 }
 

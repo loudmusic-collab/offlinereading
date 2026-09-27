@@ -89,6 +89,23 @@ try {
   console.log('  progress labels seen:', [...labels].join(' | '));
   check([...labels].some((l) => /Downloading \d+ of 4/.test(l)), 'progress shows "Downloading N of 4…"');
 
+  // "Full articles only" is on by default: the 403 and bot-wall stories are skipped.
+  check((await page.locator('.story').count()) === 2, 'full articles only (default): 2 stories kept');
+  check((await page.locator('.story .badge').count()) === 0, 'full articles only: no summary-only stories');
+  check(/2 skipped \(no full text\)/.test(await page.locator('#toast').textContent()), 'sync summary reports 2 skipped');
+
+  // Turn it off and sync again: the skipped stories now come in as summaries.
+  await page.click('a[href="#/settings"]');
+  await page.waitForFunction(() => document.querySelector('.full-only')?.checked === true);
+  await page.click('.full-only');
+  await page.waitForFunction(() => document.querySelector('.full-only').checked === false);
+  await page.click('a[aria-label="Back to stories"]');
+  await page.waitForSelector('.story');
+  await page.click('.sync-btn');
+  await page.waitForFunction(() => document.querySelectorAll('.story').length === 4 && !document.querySelector('.sync-btn').disabled, null, {
+    timeout: 60000,
+  });
+
   const titles = await page.locator('.story-title').allTextContents();
   check(titles.length === 4, `4 stories stored (7-day-old item skipped) — got ${titles.length}`);
   check((await page.locator('.story .badge').count()) === 2, 'blocked (403) and bot-wall stories marked "Summary"');

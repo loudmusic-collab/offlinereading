@@ -38,6 +38,7 @@ window.addEventListener('offline', () => {
 function summarise(r) {
   const parts = [r.added ? `${r.added} new ${r.added === 1 ? 'story' : 'stories'}` : 'No new stories'];
   if (r.fallback) parts.push(`${r.fallback} summary-only`);
+  if (r.skipped) parts.push(`${r.skipped} skipped (no full text)`);
   if (r.failedFeeds.length) parts.push(`${r.failedFeeds.map((f) => f.name).join(', ')} unavailable`);
   return parts.join(' · ');
 }

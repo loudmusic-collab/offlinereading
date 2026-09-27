@@ -26,6 +26,7 @@ function syncReport(result) {
   if (!result) return '';
   const bits = [`${result.added} new`];
   if (result.fallback) bits.push(`${result.fallback} summary-only`);
+  if (result.skipped) bits.push(`${result.skipped} skipped (no full text)`);
   if (result.pruned) bits.push(`${result.pruned} cleaned up`);
   const failed = result.failedFeeds.map((f) => `<li><strong>${esc(f.name)}</strong> — ${esc(f.error)}</li>`).join('');
   return `<p>Last sync: ${bits.join(' · ')}</p>${failed ? `<p>Couldn’t reach:</p><ul>${failed}</ul>` : ''}`;

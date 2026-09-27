@@ -9,11 +9,12 @@ A mobile-first PWA that downloads full article text and images while you're onli
 
 | | |
 |---|---|
-| **Feeds** | BBC News, The Guardian, Reuters, NY Times, AP by default. You can add, remove or toggle feeds in Settings. RSS 2.0, RSS 1.0/RDF and Atom are supported. |
+| **Feeds** | BBC News, The Guardian, NPR, Al Jazeera and DW are on by default. NY Times, Reuters and AP are in the list but switched off. You can add, remove or toggle feeds in Settings. RSS 2.0, RSS 1.0/RDF and Atom are supported. |
 | **Sync now** | Button or pull-to-refresh. Fetches each feed, downloads each article through the proxy, runs Readability and falls back to the RSS summary if extraction fails. It also downloads the hero image and up to 6 inline images, resized to JPEG, plus a thumbnail. Progress shows as "Downloading 12 of 40…". |
 | **Story list** | Thumbnail, title, source, relative date, unread dot, day headings, All/Unread and per-source filters. A "Summary" badge marks stories where only the feed summary was saved. |
 | **Reader** | Serif typography, adjustable text size, images rendered from stored blobs, marked as read when opened (you can mark it unread again), and a notice explaining why a story is summary-only. |
-| **Settings** | Manage feeds, set the maximum stored stories (default 50) and toggle image downloads. It also shows storage in use (text vs images, plus the browser's quota estimate), with "Clean up now" and "Delete all" buttons. |
+| **Full articles only** | On by default. Stories whose full text can't be downloaded (paywalls, blocked sites) are skipped instead of saved as a summary. Their slots are backfilled with the next-newest stories, and they aren't retried for a week. Turn it off in Settings to keep summary-only stories. |
+| **Settings** | Manage feeds, set the maximum stored stories (default 50) and toggle full-articles-only and image downloads. It also shows storage in use (text vs images, plus the browser's quota estimate), with "Clean up now" and "Delete all" buttons. |
 | **Offline shell** | The service worker precaches the whole app shell, so the app opens with no connectivity. |
 | **Auto-prune** | Runs after every sync and on app start. See [Storage limits](#storage-limits). |
 
@@ -83,7 +84,7 @@ Publishers often block scrapers with 401/403/429, bot walls, paywalls or consent
 - the extracted text is under 600 characters
 - the text looks like a bot check
 
-The reader shows a yellow **Summary only** note with the reason, and the list shows a "Summary" badge. You never get an empty or broken article.
+With **Full articles only** on (the default), those stories are skipped. With it off, the reader shows a yellow **Summary only** note with the reason, and the list shows a "Summary" badge. Either way, you never get an empty or broken article.
 
 ### Storage limits
 
@@ -109,13 +110,20 @@ It is still a fetcher anyone can call directly. If that matters for your deploym
 
 ## Default feeds — caveats
 
-| Source | URL | Notes |
-|---|---|---|
-| BBC News | `https://feeds.bbci.co.uk/news/rss.xml` | Official. Articles usually extract well. |
-| The Guardian | `https://www.theguardian.com/world/rss` | Official. Articles usually extract well. |
-| NY Times | `https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml` | Official. Paywalled pages often fall back to the summary. |
-| Reuters | `https://www.reutersagency.com/feed/?best-topics=top-news&post_type=best` | **Reuters discontinued its public RSS feeds in 2020.** This is the Reuters Agency WordPress feed and may change or disappear. Reuters article pages are heavily bot-protected, so expect summaries. |
-| AP News | `https://rsshub.app/apnews/topics/apf-topnews` | **AP has no official public RSS feed.** This goes through the public RSSHub instance, which is rate-limited. For reliability, self-host RSSHub or swap in another feed. AP pages are often bot-protected. |
+| Source | URL | Default | Notes |
+|---|---|---|---|
+| BBC News | `https://feeds.bbci.co.uk/news/rss.xml` | on | Official, free to read |
+| The Guardian | `https://www.theguardian.com/world/rss` | on | Official, free to read |
+| NPR | `https://feeds.npr.org/1001/rss.xml` | on | Official, free to read |
+| Al Jazeera | `https://www.aljazeera.com/xml/rss/all.xml` | on | Official, free to read |
+| DW News | `https://rss.dw.com/rdf/rss-en-all` | on | Official (RSS 1.0/RDF), free to read |
+| NY Times | `https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml` | off | Paywalled: the server only gets a teaser, so most stories are summary-only. |
+| Reuters | `https://www.reutersagency.com/feed/?best-topics=top-news&post_type=best` | off | **No official public RSS since 2020.** This is the Reuters Agency feed and may change or disappear. Pages are bot-protected. |
+| AP News | `https://rsshub.app/apnews/topics/apf-topnews` | off | **No official public RSS.** Goes through the rate-limited public RSSHub instance. Pages are often bot-protected. |
+
+Existing installs are migrated once (`feedsVersion` 2). NPR, Al Jazeera and DW are added and NYT, Reuters and AP are switched off. Feeds you added or removed yourself are left alone.
+
+Other free-to-read feeds worth trying: France 24 (`https://www.france24.com/en/rss`), CBC (`https://www.cbc.ca/webfeed/rss/rss-topstories`), ABC Australia (`https://www.abc.net.au/news/feed/51120/rss.xml`) and PBS NewsHour (`https://www.pbs.org/newshour/feeds/rss/headlines`).
 
 A feed that fails doesn't stop the sync. The list shows which feeds couldn't be reached and why.
 

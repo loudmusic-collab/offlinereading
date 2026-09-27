@@ -47,3 +47,12 @@ describe('selectStories', () => {
     expect(picked).toEqual(['a1', 'b1', 'a3']);
   });
 });
+
+describe('selectStories with skipped ids', () => {
+  const item = (id, ageHours) => ({ id, publishDate: now - ageHours * 3600 * 1000 });
+  it('excluded (skipped) stories do not take up slots', () => {
+    const feed = { feed: { name: 'A' }, items: [item('a1', 1), item('a2', 2), item('a3', 3)] };
+    const picked = selectStories([feed], new Set(), 2, now, new Set(['a1'])).map((p) => p.item.id);
+    expect(picked).toEqual(['a2', 'a3']);
+  });
+});

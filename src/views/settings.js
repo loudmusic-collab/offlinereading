@@ -65,6 +65,10 @@ export function renderSettings(root) {
           <input class="max-stories" type="number" inputmode="numeric" min="${MIN_STORIES}" max="${MAX_STORIES}" step="1">
         </label>
         <label class="field switch-field">
+          <span class="field-text"><strong>Full articles only</strong><small>Skip stories whose full text can’t be downloaded (paywalls, blocked sites) instead of saving just the feed summary.</small></span>
+          <input class="full-only switch" type="checkbox" role="switch">
+        </label>
+        <label class="field switch-field">
           <span class="field-text"><strong>Download images</strong><small>Turn off to save space and data. Applies to stories downloaded from now on.</small></span>
           <input class="download-images switch" type="checkbox" role="switch">
         </label>
@@ -214,6 +218,7 @@ export function renderSettings(root) {
   });
 
   $('.download-images').addEventListener('change', (e) => save({ downloadImages: e.target.checked }));
+  $('.full-only').addEventListener('change', (e) => save({ fullArticlesOnly: e.target.checked }));
 
   $('.prune-now').addEventListener('click', async () => {
     const removed = await pruneStories();
@@ -236,6 +241,7 @@ export function renderSettings(root) {
     paintFeeds();
     maxInput.value = settings.maxStories;
     $('.download-images').checked = settings.downloadImages;
+    $('.full-only').checked = settings.fullArticlesOnly;
     // Enable switch animations only after the initial state is painted.
     requestAnimationFrame(() => requestAnimationFrame(() => root.querySelector('.settings-main')?.classList.add('ready')));
     paintStats();

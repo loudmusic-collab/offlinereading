@@ -1,5 +1,5 @@
 import { HERO_MAX_DIM, INLINE_MAX_DIM, MAX_AGE_MS, MAX_INLINE_IMAGES, THUMB_MAX_DIM } from './config.js';
-import { getArticleIds, getSettings, putArticle, setMeta } from './db.js';
+import { getArticleIds, getMeta, getSettings, putArticle, setMeta } from './db.js';
 import { extractArticle } from './extract.js';
 import { parseFeed } from './feeds.js';
 import { downloadImage, resizeImage } from './images.js';
@@ -24,10 +24,10 @@ async function mapLimit(items, limit, fn) {
  * Pick which stories to keep: round-robin across feeds, newest first, so one
  * prolific feed can't crowd the others out. Returns the ones not yet stored.
  */
-export function selectStories(feedResults, existingIds, maxStories, now = Date.now()) {
+export function selectStories(feedResults, existingIds, maxStories, now = Date.now(), excludedIds = new Set()) {
   const queues = feedResults.map(({ feed, items }) =>
     items
-      .filter((it) => !it.publishDate || now - it.publishDate < MAX_AGE_MS)
+      .filter((it) => !excludedIds.has(it.id) && (!it.publishDate || now - it.publishDate < MAX_AGE_MS))
       .sort((a, b) => (b.publishDate || 0) - (a.publishDate || 0))
       .map((item) => ({ item, feed })),
   );
@@ -69,6 +69,8 @@ async function downloadStory({ item, feed }, settings, signal) {
   }
 
   const useFull = extraction?.ok === true;
+  if (!useFull && settings.fullArticlesOnly) return { skipped: true, reason: note };
+
   const images = settings.downloadImages ? 'collect' : 'strip';
   const clean = sanitizeHTML(useFull ? extraction.contentHTML : item.summaryHTML, {
     baseUrl: useFull ? pageUrl : item.link,
@@ -164,32 +166,57 @@ export async function syncNow({ onProgress = () => {}, signal } = {}) {
       })
     ).filter(Boolean);
 
-    const todo = selectStories(feedResults, await getArticleIds(), settings.maxStories);
+    // Stories with no full text (paywalls, blocked sites) are remembered for a
+    // week so "full articles only" doesn't re-download them on every sync.
+    const now = Date.now();
+    const skippedIds = new Map(Object.entries((await getMeta('skipped')) || {}).filter(([, t]) => now - t < MAX_AGE_MS));
+    const excluded = () => (settings.fullArticlesOnly ? new Set(skippedIds.keys()) : new Set());
+
     let done = 0;
+    let total = 0;
     let fallback = 0;
     let failed = 0;
-    const total = todo.length;
+    let skipped = 0;
+    const attempted = new Set();
     const report = () =>
       onProgress({ phase: 'articles', done, total, label: `Downloading ${Math.min(done + 1, total)} of ${total}…` });
-    if (total) report();
 
-    await mapLimit(todo, 3, async (entry) => {
-      try {
-        const record = await downloadStory(entry, settings, sig);
-        if (!record.extracted) fallback++;
-      } catch (err) {
-        if (sig.aborted) throw sig.reason;
-        failed++;
-        console.warn('Story failed', entry.item.link, err);
-      }
-      done++;
-      if (done < total) report();
-    });
+    // Skipped stories free up their slots, so backfill with the next-newest
+    // ones (a couple of extra rounds at most).
+    for (let round = 0; round < 3; round++) {
+      const todo = selectStories(feedResults, await getArticleIds(), settings.maxStories, now, excluded()).filter(
+        ({ item }) => !attempted.has(item.id),
+      );
+      if (!todo.length) break;
+      todo.forEach(({ item }) => attempted.add(item.id));
+      total += todo.length;
+      report();
+
+      let skippedThisRound = 0;
+      await mapLimit(todo, 3, async (entry) => {
+        try {
+          const record = await downloadStory(entry, settings, sig);
+          if (record.skipped) {
+            skippedIds.set(entry.item.id, Date.now());
+            skippedThisRound++;
+          } else if (!record.extracted) fallback++;
+        } catch (err) {
+          if (sig.aborted) throw sig.reason;
+          failed++;
+          console.warn('Story failed', entry.item.link, err);
+        }
+        done++;
+        if (done < total) report();
+      });
+      skipped += skippedThisRound;
+      if (!skippedThisRound) break;
+    }
+    await setMeta('skipped', Object.fromEntries(skippedIds));
 
     onProgress({ phase: 'cleanup', done: total, total, label: 'Cleaning up…' });
     const pruned = await pruneStories();
     await setMeta('lastSync', Date.now());
-    return { added: total - failed, fallback, failed, pruned, failedFeeds, feedCount: feeds.length };
+    return { added: total - failed - skipped, fallback, skipped, failed, pruned, failedFeeds, feedCount: feeds.length };
   } catch (err) {
     if (sig.aborted && sig.reason instanceof OfflineError) throw sig.reason;
     throw err;
